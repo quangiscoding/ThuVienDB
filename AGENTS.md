@@ -16,20 +16,20 @@
 
 ## Mandatory Coding Rules
 - **Source of Truth:** Always read `SPEC.md` and `db/001_schema/001_create-schema.sql` before writing SQL or Python. Never invent table, column, or collection names.
-- **Naming Convention:** Keep existing Vietnamese names (`sp_LapPhieuMuon`, `sp_LapPhieuTra`, table names) untouched. Write all new procedures/views in `002_catalog`, `004_fines`, and `005_reports` in **English** (`sp_AddBookTitle`, `sp_RecordFinePayment`, `vw_Report_*` / `sp_Report_*`).
+- **Naming Convention:** Use **100% English PascalCase** across all tables, columns, views, functions, and stored procedures (`Student`, `Staff`, `LoanSlip`, `sp_CreateLoanSlip`, `sp_CreateReturnSlip`, `sp_AddBookTitle`, `sp_RecordFinePayment`, `vw_Report_*`). Do not retain Vietnamese identifiers or error messages.
 - **Idempotency:** Every file in `db/003_program/` must use `CREATE OR ALTER PROCEDURE`, `CREATE OR ALTER FUNCTION`, or `CREATE OR ALTER VIEW` with `GO` batch separators so `03_run_programs.bat` is safely re-runnable.
-- **Transactions & Errors:** Use `SET XACT_ABORT ON` with `BEGIN TRY ... BEGIN CATCH` and `THROW` using the error codes defined in `SPEC.md` Section 4.
+- **Transactions & Errors:** Follow the nested-safe transaction pattern (`IF @@TRANCOUNT = 0 BEGIN TRANSACTION ... ELSE SAVE TRANSACTION ...`) with `BEGIN TRY ... BEGIN CATCH` and raise errors using the codes defined in `SPEC.md` Section 4.
 - **Schema Sync:** Any column/constraint change in `001_create-schema.sql` must also update `002_drop-schema.sql`, `003_delete-schema-data.sql`, and `002_seed/`.
-- **Cross-DB Key Integrity:** Python scripts in `nosql/` must query live `MaVach` and `MaSinhVien` values from SQL Server (`ThuVien2`) before generating MongoDB documents so cross-database joins in `analytics/` succeed cleanly.
-- **Testing:** Every new procedure, function, or view requires a corresponding test script in `db/tests/<domain>/` covering both happy paths and `THROW` error cases. Keep `test_fn_CalculateFine.sql` strictly in `db/tests/001_shared/`.
+- **Cross-DB Key Integrity:** Python scripts in `nosql/` must query live `Barcode` and `StudentCode` values from SQL Server (`ThuVien2`) before generating MongoDB documents so cross-database joins in `analytics/` succeed cleanly.
+- **Testing:** Every new procedure, function, or view requires a corresponding test script in `db/tests/<domain>/` covering both happy paths and error cases. Keep `test_fn_CalculateFine.sql` strictly in `db/tests/001_shared/`.
 
 ## Phased Implementation Protocol
 Execute work strictly in sequential phases. Complete and verify the current phase before starting the next—never implement multiple phases in a single pass unless explicitly instructed:
-1. **Phase 1 — Schema Alignment (`db/001_schema/`):** Apply DDL updates and sync `001_create-schema.sql`, `002_drop-schema.sql`, and `003_delete-schema-data.sql`. Verify with `scripts/01_reset_schema.bat`.
-2. **Phase 2 — Seed Data Sync (`db/002_seed/`):** Update seed files in dependency order to match schema changes and include edge-case fixtures. Verify with `scripts/02_run_seeds.bat`.
-3. **Phase 3 — Shared & Circulation Audit (`db/003_program/001_shared`, `003_circulation`):** Review and align `fn_CalculateFine`, `sp_LapPhieuMuon`, and `sp_LapPhieuTra` with `SPEC.md`.
+1. **Phase 1 — Schema Alignment & English Refactor (`db/001_schema/`):** Refactor all tables/columns to 100% English, apply DDL updates, and sync `001_create-schema.sql`, `002_drop-schema.sql`, and `003_delete-schema-data.sql`. Verify with `scripts/01_reset_schema.bat`.
+2. **Phase 2 — Seed Data Refactor & Sync (`db/002_seed/`):** Update all seed files in dependency order to match the English schema and include edge-case fixtures. Verify with `scripts/02_run_seeds.bat`.
+3. **Phase 3 — Shared & Circulation Refactor (`db/003_program/001_shared`, `003_circulation`, `db/tests/`):** Refactor `fn_CalculateFine`, `sp_CreateLoanSlip` (formerly `sp_LapPhieuMuon`), and `sp_CreateReturnSlip` (formerly `sp_LapPhieuTra`) to 100% English, fix constraint/parameter bugs, and update unit tests.
 4. **Phase 4 — Catalog Module (`db/003_program/002_catalog`):** Implement catalog stored procedures (`sp_AddBookTitle`, `sp_AddBookCopies`, `sp_UpdateCopyStatus`, `sp_SearchCatalog`).
 5. **Phase 5 — Fines Module (`db/003_program/004_fines`):** Implement fine payment and waiver procedures (`sp_RecordFinePayment`, `sp_WaiveFine`, `sp_GetStudentFineBalance`).
 6. **Phase 6 — Analytical Reports & SQL Tests (`db/003_program/005_reports`, `db/tests/`, `scripts/`):** Implement the 10 reporting views/procedures, complete all SQL test scripts, update `03_run_programs.bat`, and run `scripts/setup_all.bat` to confirm zero errors.
-7. **Phase 7 — NoSQL Log Pipeline (`nosql/`):** Create `sample_logs.json` and `generate_logs.py` to insert 5,000+ high-frequency event logs into MongoDB using real `MaVach` and `MaSinhVien` keys from SQL Server.
+7. **Phase 7 — NoSQL Log Pipeline (`nosql/`):** Create `sample_logs.json` and `generate_logs.py` to insert 5,000+ high-frequency event logs into MongoDB using real `Barcode` and `StudentCode` keys from SQL Server.
 8. **Phase 8 — Cross-DB Analytics & Visualization (`analytics/`):** Create `requirements.txt` and `join_and_analyze.py` to join SQL Server and MongoDB data via `pandas` and export 3–4 insight charts to `analytics/charts/`.
