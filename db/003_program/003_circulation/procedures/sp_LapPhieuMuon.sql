@@ -10,18 +10,18 @@ BEGIN
     SET NOCOUNT ON;
 
     -- =========================================================================
-    -- PHASE 1: PRE-VALIDATION
+    -- 1. PRE-VALIDATION
     -- =========================================================================
     DECLARE @SinhVienID INT;
 
-    -- Tra cứu ID từ mã sinh viên truyền vào
     SELECT @SinhVienID = SinhVienID 
     FROM dbo.SinhVien 
     WHERE MaSinhVien = @MaSinhVien;
 
     IF @SinhVienID IS NULL
     BEGIN
-        THROW 50001, N'Lỗi: Mã sinh viên không tồn tại trong hệ thống.', 1;
+        RAISERROR(N'Lỗi: Mã sinh viên không tồn tại trong hệ thống.', 16, 1);
+        RETURN;
     END
 
     -- Kiểm tra nợ tiền phạt chưa thanh toán
@@ -33,7 +33,8 @@ BEGIN
         WHERE pt.SinhVienID = @SinhVienID AND dp.Status = 'UNPAID'
     )
     BEGIN
-        THROW 50002, N'Lỗi: Sinh viên đang có khoản phạt chưa đóng. Vui lòng thanh toán trước khi mượn tiếp.', 1;
+        RAISERROR(N'Lỗi: Sinh viên đang có khoản phạt chưa đóng. Vui lòng thanh toán trước khi mượn tiếp.', 16, 1);
+        RETURN;
     END
 
     -- Kiểm tra nợ sách quá hạn
@@ -47,7 +48,8 @@ BEGIN
           AND dm.NgayHenTra < CAST(GETDATE() AS DATE)
     )
     BEGIN
-        THROW 50003, N'Lỗi: Sinh viên đang nợ sách quá hạn chưa trả.', 1;
+        RAISERROR(N'Lỗi: Sinh viên đang nợ sách quá hạn chưa trả.', 16, 1);
+        RETURN;
     END
 
     -- Kiểm tra giới hạn 5 cuốn
@@ -60,11 +62,12 @@ BEGIN
 
     IF (@CurrentlyBorrowedCount >= 5)
     BEGIN
-        THROW 50004, N'Lỗi: Sinh viên đã đạt giới hạn mượn tối đa (5 cuốn).', 1;
+        RAISERROR(N'Lỗi: Sinh viên đã đạt giới hạn mượn tối đa (5 cuốn).', 16, 1);
+        RETURN;
     END
 
     -- =========================================================================
-    -- PHASE 2: ATOMIC MUTATION
+    -- 2. ATOMIC MUTATION
     -- =========================================================================
     DECLARE @TranStarted BIT = 0;
 
@@ -85,7 +88,8 @@ BEGIN
 
         IF @@ROWCOUNT = 0
         BEGIN
-            THROW 50005, N'Lỗi: Cuốn sách không tồn tại hoặc hiện không ở trạng thái sẵn sàng (AVAILABLE).', 1;
+            RAISERROR(N'Lỗi: Cuốn sách không tồn tại hoặc hiện không ở trạng thái sẵn sàng (AVAILABLE).', 16, 1);
+            RETURN;
         END
 
         DECLARE @BorrowingID INT;
@@ -98,14 +102,17 @@ BEGIN
         VALUES (@BookItemID, @BorrowingID, DATEADD(DAY, @SoNgayMuon, CAST(GETDATE() AS DATE)));
 
         IF @TranStarted = 1
+        BEGIN
             COMMIT TRANSACTION;
+        END
 
         SELECT @BorrowingID AS BorrowingID, N'Thành công' AS Message;
     END TRY
     BEGIN CATCH
         IF @TranStarted = 1
         BEGIN
-            IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+            IF @@TRANCOUNT > 0 
+                ROLLBACK TRANSACTION;
         END
         ELSE
         BEGIN
@@ -113,7 +120,10 @@ BEGIN
                 ROLLBACK TRANSACTION sp_LapPhieuMuon_Inner;
         END
 
-        THROW;
+        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE();
+        DECLARE @ErrSeverity INT = ERROR_SEVERITY();
+        DECLARE @ErrState INT = ERROR_STATE();
+        RAISERROR(@ErrMsg, @ErrSeverity, @ErrState);
     END CATCH
 END;
 GO
