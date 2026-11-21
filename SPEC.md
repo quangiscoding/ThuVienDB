@@ -13,9 +13,10 @@ Database-first Library Management System built on **Microsoft SQL Server (T-SQL)
 ## 3. Business Rules & Modules
 
 ### 3.1 Shared (`001_shared`)
-- **`fn_CalculateFine`**:
-  - `LATE`: `DATEDIFF(DAY, NgayHenTra, NgayTra) * RatePerDay + FixedProcessingFee` (returns `0` if `NgayTra <= NgayHenTra`).
-  - `LOST` / `DAMAGED`: `(BookItem.Price * PercentOfBookValue) + FixedProcessingFee`.
+- **`fn_CalculateFine(@RuleID, @DaysOverdue, @BookPrice, @CustomDamagePercent)`**:
+  - Looks up `FineRule` by `@RuleID`. Returns `NULL` if `@RuleID` does not exist.
+  - Formula: `(@DaysOverdue * RatePerDay) + (@BookPrice * Percent) + FixedProcessingFee`.
+  - Allows `@CustomDamagePercent` in `(0, 1]` to override `PercentOfBookValue` for `DAMAGED` rules only.
 
 ### 3.2 Catalog (`002_catalog`) — English Naming
 - **`sp_AddBookTitle`**: Creates a `BookTitle` record and links one or more `AuthorID`s in `Author_BookTitle`.
@@ -24,21 +25,22 @@ Database-first Library Management System built on **Microsoft SQL Server (T-SQL)
 - **`sp_SearchCatalog`**: Queries `BookTitle` joined with `Author` and `BookItem`, returning book metadata, total copies, and count of `'AVAILABLE'` copies.
 
 ### 3.3 Circulation (`003_circulation`) — Existing Vietnamese Naming
-- **`sp_LapPhieuMuon`** (Create Borrow Slip):
-  - **Loan Duration:** Default `NgayHenTra = DATEADD(DAY, 14, NgayMuon)`.
-  - **Borrower Eligibility Checks (must throw error if violated):**
-    1. Student exists and `SinhVien.TrangThai = 'ACTIVE'`.
-    2. Student has **no** fines in `DongPhat` with `Status IN ('UNPAID', 'PARTIAL')`.
-    3. Student has **no** currently unreturned books past `NgayHenTra`.
-    4. Active unreturned books + new books requested $\le 3$ (max borrow cap).
-  - **Item Check:** Every requested `BookItemID` must have `StatusID = 'AVAILABLE'`.
-  - **State Change:** Inserts `PhieuMuon` & `DongMuon`, updates `BookItem.StatusID` to `'BORROWED'`.
-- **`sp_LapPhieuTra`** (Create Return Slip):
-  - Validates each `DongMuonID` is currently unreturned (not in `DongTra`) and belongs to the student.
-  - Inserts `PhieuTra` & `DongTra`.
-  - Evaluates return condition (`NORMAL`, `DAMAGED`, `LOST`):
-    - Updates `BookItem.StatusID` to `'AVAILABLE'`, `'DAMAGED'`, or `'LOST'`.
-    - Calls `fn_CalculateFine` for overdue (`LATE`) and/or `DAMAGED`/`LOST` rules; inserts `DongPhat` rows (`Status = 'UNPAID'`) whenever calculated amount $> 0$ (linking `DongTraID` for `LATE`/`DAMAGED`, or `DongMuonID` for `LOST`).
+- **`sp_LapPhieuMuon(@MaSinhVien, @NhanVienID, @BookItemID, @SoNgayMuon = 14)`**:
+  - **Bug Fixes Required:** Must accept `@NhanVienID INT` (required by `PhieuMuon.NhanVienID NOT NULL`) and check unpaid fines across **both** `DongTraID` and `DongMuonID` paths (`Status IN ('UNPAID', 'PARTIAL')`).
+  - **Borrower Eligibility Checks:**
+    1. Student exists (`@MaSinhVien`) and `SinhVien.TrangThai = 'ACTIVE'`.
+    2. Staff exists (`@NhanVienID`).
+    3. Student has **no** fines in `DongPhat` with `Status IN ('UNPAID', 'PARTIAL')`.
+    4. Student has **no** currently unreturned books past `NgayHenTra`.
+    5. Active unreturned books $< 3$ (max borrow cap; updated from 5 to 3).
+  - **Item Check:** `BookItemID` has `StatusID = 'AVAILABLE'`.
+  - **State Change:** Updates `BookItem.StatusID` to `'BORROWED'`, inserts `PhieuMuon` & `DongMuon`.
+
+- **`sp_LapPhieuTra(@SinhVienID, @NhanVienID, @DongMuonID, @NewBookStatus = 'AVAILABLE', @NgayTra = NULL, @CustomDamagePercent = NULL)`**:
+  - **Bug Fix Required (`CK_DongPhat_Link`):** When inserting into `dbo.DongPhat`, pass `(@DongTraID, NULL)` for `LATE` and `DAMAGED` fines, and `(NULL, @DongMuonID)` for `LOST` fines so the XOR check constraint succeeds.
+  - Validates `@DongMuonID` exists, belongs to `@SinhVienID`, and is not already in `DongTra`.
+  - Inserts `PhieuTra` & `DongTra`, updates `BookItem.StatusID` to `@NewBookStatus` (`AVAILABLE`, `DAMAGED`, or `'LOST'`).
+  - Calls `dbo.fn_CalculateFine` for overdue (`LATE`) and/or `DAMAGED`/`LOST` rules and inserts `DongPhat` rows (`Status = 'UNPAID'`) when fine $> 0$.
 
 ### 3.4 Fines (`004_fines`) — English Naming
 - **`sp_RecordFinePayment`**:
@@ -52,8 +54,8 @@ Database-first Library Management System built on **Microsoft SQL Server (T-SQL)
   - Returns itemized unpaid/partial fines and total remaining balance for a `SinhVienID`.
 
 ## 4. Error Handling & Transaction Standards
-- **Transactions:** All multi-table write procedures must wrap logic in `SET XACT_ABORT ON; BEGIN TRY BEGIN TRAN ... COMMIT TRAN END TRY BEGIN CATCH IF @@TRANCOUNT > 0 ROLLBACK TRAN; THROW; END CATCH`.
-- **Custom Error Codes (`THROW`):**
+- **Nested-Safe Transactions:** Follow the existing pattern in `sp_LapPhieuMuon` / `sp_LapPhieuTra` (`IF @@TRANCOUNT = 0 BEGIN TRANSACTION ... ELSE SAVE TRANSACTION ...`) so procedures compose cleanly inside T-SQL test wrappers.
+- **Validation Errors:** Raise descriptive errors with severity `16` (`RAISERROR` or `THROW` `50001`–`50007`) on all validation failures:
   - `50001`: Student not found or account not `ACTIVE`
   - `50002`: Student has unpaid/partial fines
   - `50003`: Student has overdue unreturned books
