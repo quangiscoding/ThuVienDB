@@ -1,14 +1,14 @@
 # SPEC.md — ThuVien2 Library Management System Specification
 
 ## 1. System Overview
-Database-first Library Management System built on **Microsoft SQL Server (T-SQL)**. All core business rules, validation, and transactional state changes live in stored procedures and scalar/table-valued functions.
+Database-first Library Management System built on **Microsoft SQL Server (T-SQL)**, extended with a **MongoDB** high-frequency event log store and a **Python** cross-database analytics pipeline. All core relational business rules, validation, and transactional state changes live in SQL Server stored procedures and functions.
 
-## 2. Domain Entities (Existing Schema)
+## 2. Domain Entities (Relational Schema)
 - **Staff & Roles:** `dbo.Role` (`ADMIN`, `LIBRARIAN`), `dbo.NhanVien`
 - **Patrons:** `dbo.SinhVien` (`TrangThai`: `ACTIVE`, `SUSPENDED`, `EXPIRED`)
 - **Catalog:** `dbo.BookTitle`, `dbo.Author`, `dbo.Author_BookTitle`, `dbo.BookItem` (individual barcodes `MaVach`, `Price`, `StatusID`: `AVAILABLE`, `BORROWED`, `LOST`, `DAMAGED`)
 - **Circulation:** `dbo.PhieuMuon` (header) + `dbo.DongMuon` (line items, 14-day default loan), `dbo.PhieuTra` (header) + `dbo.DongTra` (line items)
-- **Fines & Receipts:** `dbo.FineRule` (`LATE`, `LOST`, `DAMAGED`), `dbo.DongPhat` (fine ledger linked XOR to `DongTraID` or `DongMuonID`), `dbo.PhieuThu` + `dbo.DongThu` (payment/waiver receipts)
+- **Fines & Receipts:** `dbo.FineRule` (`LATE`, `LOST`, `DAMAGED`), `dbo.DongPhat` (fine ledger linked XOR to `DongTraID` or `DongMuonID`), `dbo.PhieuThu` (`LoaiPhieu`: `PAYMENT`, `WAIVER`) + `dbo.DongThu` (payment/waiver line items)
 
 ## 3. Business Rules & Modules
 
@@ -61,3 +61,15 @@ Database-first Library Management System built on **Microsoft SQL Server (T-SQL)
   - `50005`: BookItem is not `AVAILABLE`
   - `50006`: Invalid or already-returned loan item (`DongMuonID`)
   - `50007`: Payment exceeds remaining fine balance
+
+## 5. Analytical & Reporting Module (`005_reports`) — Course Report Ch. 1 & 2
+- **Deliverable:** Create 10 SQL `VIEW`s or `sp_Report_*` procedures in `db/003_program/005_reports/` covering library KPIs (circulation trends, overdue/fine analytics, inventory status, student activity, and staff workload).
+- **Agent Autonomy:** Antigravity should propose the exact 10 analytical queries based on the existing schema in `PLAN.md` for user approval before implementation.
+
+## 6. NoSQL Logs & Cross-DB Analytics (`nosql/`, `analytics/`) — Course Report Ch. 3 & 4
+- **MongoDB (`nosql/`):** Store high-frequency library event logs (e.g., kiosk barcode scans and catalog searches) in MongoDB.
+  - **Join Key Constraint:** Every generated JSON log document **must** reference real `MaVach` and/or `MaSinhVien` values queried directly from `ThuVien2` (SQL Server) so cross-database joins succeed.
+  - **Scale:** Provide a Python generator script (`generate_logs.py`) that inserts at least 5,000 realistic mock log documents.
+- **Python Analytics (`analytics/`):**
+  - Connect to both SQL Server (`pyodbc`/`sqlalchemy`) and MongoDB (`pymongo`), join the datasets using `pandas` on `MaVach` / `MaSinhVien`, and export 3–4 business insight charts (`.png`) to `analytics/charts/`.
+  - **Agent Autonomy:** Antigravity should propose the exact JSON document schema and chart insights in `PLAN.md` for user approval.
