@@ -2,23 +2,23 @@ USE ThuVien2;
 GO
 
 -- =============================================================================
--- DROP TABLES (dependency order)
+-- DROP TABLES (reverse FK dependency order)
 -- =============================================================================
-DROP TABLE IF EXISTS dbo.DongThu;
-DROP TABLE IF EXISTS dbo.PhieuThu;
-DROP TABLE IF EXISTS dbo.DongPhat;
+DROP TABLE IF EXISTS dbo.PaymentItem;
+DROP TABLE IF EXISTS dbo.PaymentReceipt;
+DROP TABLE IF EXISTS dbo.FineItem;
 DROP TABLE IF EXISTS dbo.FineRule;
-DROP TABLE IF EXISTS dbo.DongTra;
-DROP TABLE IF EXISTS dbo.PhieuTra;
-DROP TABLE IF EXISTS dbo.DongMuon;
-DROP TABLE IF EXISTS dbo.PhieuMuon;
+DROP TABLE IF EXISTS dbo.ReturnItem;
+DROP TABLE IF EXISTS dbo.ReturnSlip;
+DROP TABLE IF EXISTS dbo.LoanItem;
+DROP TABLE IF EXISTS dbo.LoanSlip;
 DROP TABLE IF EXISTS dbo.BookItem;
 DROP TABLE IF EXISTS dbo.Author_BookTitle;
 DROP TABLE IF EXISTS dbo.BookTitle;
 DROP TABLE IF EXISTS dbo.Author;
 DROP TABLE IF EXISTS dbo.Status;
-DROP TABLE IF EXISTS dbo.SinhVien;
-DROP TABLE IF EXISTS dbo.NhanVien;
+DROP TABLE IF EXISTS dbo.Student;
+DROP TABLE IF EXISTS dbo.Staff;
 DROP TABLE IF EXISTS dbo.Role;
 GO
 
@@ -30,11 +30,11 @@ CREATE TABLE dbo.Role (
     RoleTitle NVARCHAR(100) NOT NULL
 );
 
-CREATE TABLE dbo.NhanVien (
-    NhanVienID INT IDENTITY(1,1) PRIMARY KEY,
-    MaNhanVien VARCHAR(20) NOT NULL UNIQUE,   -- 'NV01', 'NV02'
+CREATE TABLE dbo.Staff (
+    StaffID INT IDENTITY(1,1) PRIMARY KEY,
+    StaffCode VARCHAR(20) NOT NULL UNIQUE,    -- 'NV01', 'NV02'
     RoleID VARCHAR(20) NOT NULL,
-    HoTen NVARCHAR(100) NOT NULL,
+    FullName NVARCHAR(100) NOT NULL,
     Email VARCHAR(100),
     FOREIGN KEY (RoleID) REFERENCES dbo.Role(RoleID)
 );
@@ -42,12 +42,14 @@ CREATE TABLE dbo.NhanVien (
 -- =============================================================================
 -- 2. STUDENTS / PATRONS
 -- =============================================================================
-CREATE TABLE dbo.SinhVien (
-    SinhVienID INT IDENTITY(1,1) PRIMARY KEY,
-    MaSinhVien VARCHAR(20) NOT NULL UNIQUE,
-    HoTen NVARCHAR(100) NOT NULL,
-    Lop NVARCHAR(50),
-    Email VARCHAR(100)
+CREATE TABLE dbo.Student (
+    StudentID INT IDENTITY(1,1) PRIMARY KEY,
+    StudentCode VARCHAR(20) NOT NULL UNIQUE,
+    FullName NVARCHAR(100) NOT NULL,
+    ClassName NVARCHAR(50),
+    Email VARCHAR(100),
+    Status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    CONSTRAINT CK_Student_Status CHECK (Status IN ('ACTIVE', 'SUSPENDED', 'EXPIRED'))
 );
 
 -- =============================================================================
@@ -60,7 +62,7 @@ CREATE TABLE dbo.Status (
 
 CREATE TABLE dbo.Author (
     AuthorID INT IDENTITY(1,1) PRIMARY KEY,
-    TenTacGia NVARCHAR(100) NOT NULL
+    AuthorName NVARCHAR(100) NOT NULL
 );
 
 CREATE TABLE dbo.BookTitle (
@@ -79,10 +81,10 @@ CREATE TABLE dbo.Author_BookTitle (
 
 CREATE TABLE dbo.BookItem (
     BookItemID INT IDENTITY(1,1) PRIMARY KEY,
-    MaVach VARCHAR(30) NOT NULL UNIQUE,       -- 'BI001', 'BI002'
+    Barcode VARCHAR(30) NOT NULL UNIQUE,      -- 'BI001', 'BI002'
     TitleID INT NOT NULL,
     StatusID VARCHAR(20) NOT NULL DEFAULT 'AVAILABLE',
-    Price DECIMAL(18, 2) CHECK (Price IS NULL OR Price >= 0),
+    Price DECIMAL(18, 2) NOT NULL DEFAULT 0 CHECK (Price >= 0),
     FOREIGN KEY (TitleID) REFERENCES dbo.BookTitle(TitleID),
     FOREIGN KEY (StatusID) REFERENCES dbo.Status(StatusID)
 );
@@ -90,48 +92,47 @@ CREATE TABLE dbo.BookItem (
 -- =============================================================================
 -- 4. BORROWING TRANSACTIONS
 -- =============================================================================
-CREATE TABLE dbo.PhieuMuon (
-    BorrowingID INT IDENTITY(1,1) PRIMARY KEY,
-    SinhVienID INT NOT NULL,
-    NhanVienID INT NOT NULL,
-    NgayMuon DATE NOT NULL,
-    FOREIGN KEY (SinhVienID) REFERENCES dbo.SinhVien(SinhVienID),
-    FOREIGN KEY (NhanVienID) REFERENCES dbo.NhanVien(NhanVienID)
+CREATE TABLE dbo.LoanSlip (
+    LoanSlipID INT IDENTITY(1,1) PRIMARY KEY,
+    StudentID INT NOT NULL,
+    StaffID INT NOT NULL,
+    LoanDate DATE NOT NULL,
+    FOREIGN KEY (StudentID) REFERENCES dbo.Student(StudentID),
+    FOREIGN KEY (StaffID) REFERENCES dbo.Staff(StaffID)
 );
 
-CREATE TABLE dbo.DongMuon (
-    DongMuonID INT IDENTITY(1,1) PRIMARY KEY,
+CREATE TABLE dbo.LoanItem (
+    LoanItemID INT IDENTITY(1,1) PRIMARY KEY,
     BookItemID INT NOT NULL,
-    BorrowingID INT NOT NULL,
-    NgayHenTra DATE NOT NULL,
+    LoanSlipID INT NOT NULL,
+    DueDate DATE NOT NULL,
     FOREIGN KEY (BookItemID) REFERENCES dbo.BookItem(BookItemID),
-    FOREIGN KEY (BorrowingID) REFERENCES dbo.PhieuMuon(BorrowingID)
+    FOREIGN KEY (LoanSlipID) REFERENCES dbo.LoanSlip(LoanSlipID)
 );
 
 -- =============================================================================
 -- 5. RETURN TRANSACTIONS & FINES
 -- =============================================================================
-CREATE TABLE dbo.PhieuTra (
-    PhieuTraID INT IDENTITY(1,1) PRIMARY KEY,
-    SinhVienID INT NOT NULL,
-    NhanVienID INT NOT NULL,
-    NgayTra DATE NOT NULL,
-    FOREIGN KEY (SinhVienID) REFERENCES dbo.SinhVien(SinhVienID),
-    FOREIGN KEY (NhanVienID) REFERENCES dbo.NhanVien(NhanVienID)
+CREATE TABLE dbo.ReturnSlip (
+    ReturnSlipID INT IDENTITY(1,1) PRIMARY KEY,
+    StudentID INT NOT NULL,
+    StaffID INT NOT NULL,
+    ReturnDate DATE NOT NULL,
+    FOREIGN KEY (StudentID) REFERENCES dbo.Student(StudentID),
+    FOREIGN KEY (StaffID) REFERENCES dbo.Staff(StaffID)
 );
 
-CREATE TABLE dbo.DongTra (
-    DongTraID INT IDENTITY(1,1) PRIMARY KEY,
-    PhieuTraID INT NOT NULL,
-    DongMuonID INT NOT NULL,
-    FOREIGN KEY (PhieuTraID) REFERENCES dbo.PhieuTra(PhieuTraID),
-    FOREIGN KEY (DongMuonID) REFERENCES dbo.DongMuon(DongMuonID),
-    CONSTRAINT UQ_DongTra_DongMuon UNIQUE (DongMuonID)   -- each loan item can be returned only once
+CREATE TABLE dbo.ReturnItem (
+    ReturnItemID INT IDENTITY(1,1) PRIMARY KEY,
+    ReturnSlipID INT NOT NULL,
+    LoanItemID INT NOT NULL,
+    FOREIGN KEY (ReturnSlipID) REFERENCES dbo.ReturnSlip(ReturnSlipID),
+    FOREIGN KEY (LoanItemID) REFERENCES dbo.LoanItem(LoanItemID),
+    CONSTRAINT UQ_ReturnItem_LoanItem UNIQUE (LoanItemID) -- each loan item can be returned only once
 );
 
 -- =============================================================================
--- FineRule: the CHECK constraints below make the "empty cell = not used"
--- convention ENFORCED by the database instead of just remembered by people.
+-- FineRule: CHECK constraints enforce component rules per RuleCode.
 -- PercentOfBookValue is stored as a fraction: 0.20 = 20%, 1.00 = 100%.
 -- =============================================================================
 CREATE TABLE dbo.FineRule (
@@ -142,62 +143,61 @@ CREATE TABLE dbo.FineRule (
     PercentOfBookValue DECIMAL(5, 2) NULL,    -- used by LOST / DAMAGED only
     FixedProcessingFee DECIMAL(18, 2) NOT NULL DEFAULT 0,
 
-    -- LATE must have a daily rate and no percent; LOST/DAMAGED the opposite.
     CONSTRAINT CK_FineRule_Components CHECK (
         (RuleCode = 'LATE'    AND RatePerDay IS NOT NULL AND PercentOfBookValue IS NULL)
      OR (RuleCode = 'LOST'    AND RatePerDay IS NULL     AND PercentOfBookValue IS NOT NULL)
      OR (RuleCode = 'DAMAGED' AND RatePerDay IS NULL     AND PercentOfBookValue IS NOT NULL)
     ),
-    -- percent must be a sane fraction (0, 1]
     CONSTRAINT CK_FineRule_Percent CHECK (
         PercentOfBookValue IS NULL OR (PercentOfBookValue > 0 AND PercentOfBookValue <= 1)
     ),
-    -- daily rate cannot be negative
     CONSTRAINT CK_FineRule_Rate CHECK (RatePerDay IS NULL OR RatePerDay >= 0)
 );
 
 -- =============================================================================
--- DongPhat: a fine is linked EITHER to a return line (LATE/DAMAGED)
--- OR directly to a loan line (LOST - book never came back), never both/none.
+-- FineItem: linked EITHER to a ReturnItem (LATE/DAMAGED)
+-- OR directly to a LoanItem (LOST - book never came back), never both/none.
 -- =============================================================================
-CREATE TABLE dbo.DongPhat (
-    DongPhatID INT IDENTITY(1,1) PRIMARY KEY,
+CREATE TABLE dbo.FineItem (
+    FineItemID INT IDENTITY(1,1) PRIMARY KEY,
     FineRuleID INT NOT NULL,
-    DongTraID INT NULL,
-    DongMuonID INT NULL,
+    ReturnItemID INT NULL,
+    LoanItemID INT NULL,
     Amount DECIMAL(18, 2) NOT NULL,
     Status VARCHAR(20) NOT NULL DEFAULT 'UNPAID',
     Description NVARCHAR(255),
     FOREIGN KEY (FineRuleID) REFERENCES dbo.FineRule(RuleID),
-    FOREIGN KEY (DongTraID) REFERENCES dbo.DongTra(DongTraID),
-    FOREIGN KEY (DongMuonID) REFERENCES dbo.DongMuon(DongMuonID),
-    CONSTRAINT CK_DongPhat_Link CHECK (
-        (DongTraID IS NOT NULL AND DongMuonID IS NULL)   -- fine from a return
-     OR (DongTraID IS NULL     AND DongMuonID IS NOT NULL) -- fine for a lost book
+    FOREIGN KEY (ReturnItemID) REFERENCES dbo.ReturnItem(ReturnItemID),
+    FOREIGN KEY (LoanItemID) REFERENCES dbo.LoanItem(LoanItemID),
+    CONSTRAINT CK_FineItem_Link CHECK (
+        (ReturnItemID IS NOT NULL AND LoanItemID IS NULL)   -- fine from a return
+     OR (ReturnItemID IS NULL     AND LoanItemID IS NOT NULL) -- fine for a lost book
     ),
-    CONSTRAINT CK_DongPhat_Status CHECK (Status IN ('UNPAID', 'PAID')),
-    CONSTRAINT CK_DongPhat_Amount CHECK (Amount >= 0)
+    CONSTRAINT CK_FineItem_Status CHECK (Status IN ('UNPAID', 'PARTIAL', 'PAID', 'WAIVED')),
+    CONSTRAINT CK_FineItem_Amount CHECK (Amount >= 0)
 );
 
 -- =============================================================================
--- 6. FINE PAYMENT RECEIPTS
+-- 6. FINE PAYMENT & WAIVER RECEIPTS
 -- =============================================================================
-CREATE TABLE dbo.PhieuThu (
-    PhieuThuID INT IDENTITY(1,1) PRIMARY KEY,
-    NhanVienID INT NOT NULL,
-    SinhVienID INT NOT NULL,
-    NgayThu DATE NOT NULL,
-    Total DECIMAL(18, 2),
-    FOREIGN KEY (NhanVienID) REFERENCES dbo.NhanVien(NhanVienID),
-    FOREIGN KEY (SinhVienID) REFERENCES dbo.SinhVien(SinhVienID)
+CREATE TABLE dbo.PaymentReceipt (
+    ReceiptID INT IDENTITY(1,1) PRIMARY KEY,
+    StaffID INT NOT NULL,
+    StudentID INT NOT NULL,
+    PaymentDate DATE NOT NULL,
+    ReceiptType VARCHAR(20) NOT NULL DEFAULT 'PAYMENT',
+    Total DECIMAL(18, 2) NOT NULL DEFAULT 0 CHECK (Total >= 0),
+    FOREIGN KEY (StaffID) REFERENCES dbo.Staff(StaffID),
+    FOREIGN KEY (StudentID) REFERENCES dbo.Student(StudentID),
+    CONSTRAINT CK_PaymentReceipt_Type CHECK (ReceiptType IN ('PAYMENT', 'WAIVER'))
 );
 
-CREATE TABLE dbo.DongThu (
-    DongThuID INT IDENTITY(1,1) PRIMARY KEY,
-    PhieuThuID INT NOT NULL,
-    DongPhatID INT NOT NULL,
-    SoTien DECIMAL(18, 2) NOT NULL CHECK (SoTien >= 0),
-    FOREIGN KEY (PhieuThuID) REFERENCES dbo.PhieuThu(PhieuThuID),
-    FOREIGN KEY (DongPhatID) REFERENCES dbo.DongPhat(DongPhatID)
+CREATE TABLE dbo.PaymentItem (
+    PaymentItemID INT IDENTITY(1,1) PRIMARY KEY,
+    ReceiptID INT NOT NULL,
+    FineItemID INT NOT NULL,
+    AmountPaid DECIMAL(18, 2) NOT NULL CHECK (AmountPaid >= 0),
+    FOREIGN KEY (ReceiptID) REFERENCES dbo.PaymentReceipt(ReceiptID),
+    FOREIGN KEY (FineItemID) REFERENCES dbo.FineItem(FineItemID)
 );
 GO

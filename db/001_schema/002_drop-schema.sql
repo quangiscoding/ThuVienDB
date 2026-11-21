@@ -1,41 +1,31 @@
-USE ThuVien2
+USE ThuVien2;
+GO
+
 -- =============================================================================
--- DROP OLD TABLES (dbo schema)
+-- DROP TABLES (reverse FK dependency order)
 -- =============================================================================
 
--- 1. Xoá các bảng Phiếu Thu & Đóng Phạt (Bảng con phụ thuộc nhiều nhất)
-DROP TABLE IF EXISTS dbo.DongThu;
-DROP TABLE IF EXISTS dbo.PhieuThu;
-DROP TABLE IF EXISTS dbo.DongPhat;
+-- 1. Fine receipts & fines (deepest leaf children)
+DROP TABLE IF EXISTS dbo.PaymentItem;
+DROP TABLE IF EXISTS dbo.PaymentReceipt;
+DROP TABLE IF EXISTS dbo.FineItem;
 DROP TABLE IF EXISTS dbo.FineRule;
 
--- 2. Xoá các bảng Trả sách & Mượn sách
-DROP TABLE IF EXISTS dbo.DongTra;
-DROP TABLE IF EXISTS dbo.PhieuTra;
-DROP TABLE IF EXISTS dbo.DongMuon;
-DROP TABLE IF EXISTS dbo.PhieuMuon;
+-- 2. Return & loan transactions
+DROP TABLE IF EXISTS dbo.ReturnItem;
+DROP TABLE IF EXISTS dbo.ReturnSlip;
+DROP TABLE IF EXISTS dbo.LoanItem;
+DROP TABLE IF EXISTS dbo.LoanSlip;
 
--- 3. Xoá các bảng Sách & Danh mục
+-- 3. Catalog & physical inventory
 DROP TABLE IF EXISTS dbo.BookItem;
 DROP TABLE IF EXISTS dbo.Author_BookTitle;
 DROP TABLE IF EXISTS dbo.BookTitle;
 DROP TABLE IF EXISTS dbo.Author;
 DROP TABLE IF EXISTS dbo.Status;
 
--- 4. Xoá các bảng Nhân sự & Sinh viên (Bảng cha gốc)
-DROP TABLE IF EXISTS dbo.NhanVien;
+-- 4. Staff, roles & students (root parent tables)
+DROP TABLE IF EXISTS dbo.Student;
+DROP TABLE IF EXISTS dbo.Staff;
 DROP TABLE IF EXISTS dbo.Role;
-DROP TABLE IF EXISTS dbo.SinhVien;
-
--- =============================================================================
--- (TÙY CHỌN) XOÁ LUÔN CÁC SCHEMA MỚI NẾU MUỐN RESET HOÀN TOÀN
--- =============================================================================
-/*
-DROP TABLE IF EXISTS circulation.DongThu, circulation.PhieuThu, circulation.DongPhat, circulation.FineRule, circulation.DongTra, circulation.PhieuTra, circulation.DongMuon, circulation.PhieuMuon;
-DROP TABLE IF EXISTS catalog.BookItem, catalog.Author_BookTitle, catalog.BookTitle, catalog.Author, catalog.Status;
-DROP TABLE IF EXISTS core.NhanVien, core.Role, core.SinhVien;
-
-DROP SCHEMA IF EXISTS circulation;
-DROP SCHEMA IF EXISTS catalog;
-DROP SCHEMA IF EXISTS core;
-*/
+GO
