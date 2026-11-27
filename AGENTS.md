@@ -33,3 +33,5 @@ Execute work strictly in sequential phases. Complete and verify the current phas
 6. **Phase 6 — Analytical Reports & SQL Tests (`db/003_program/005_reports`, `db/tests/`, `scripts/`):** Implement the 10 reporting views/procedures, complete all SQL test scripts, update `03_run_programs.bat`, and run `scripts/setup_all.bat` to confirm zero errors.
 7. **Phase 7 — NoSQL Log Pipeline (`nosql/`):** Create `sample_logs.json` and `generate_logs.py` to insert 5,000+ high-frequency event logs into MongoDB using real `Barcode` and `StudentCode` keys from SQL Server.
 8. **Phase 8 — Cross-DB Analytics & Visualization (`analytics/`):** Create `requirements.txt` and `join_and_analyze.py` to join SQL Server and MongoDB data via `pandas` and export 3–4 insight charts to `analytics/charts/`.
+
+9. **Phase 9 — Bulk Dataset Scaling & Chart Polish (`scripts/`, `nosql/`, `analytics/`):** Add `scripts/seed_bulk_sql.py` (~40 students, ~20 titles, ~75 copies, ~300 6-month transactions), scale `nosql/generate_logs.py` to 8,000 skewed logs, and polish Top-10 chart layouts in `analytics/join_and_analyze.py`.

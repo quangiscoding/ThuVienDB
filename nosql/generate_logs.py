@@ -1,9 +1,9 @@
 """
-Bulk MongoDB Event Log Generator for ThuVien2 (Phase 7).
+Bulk MongoDB Event Log Generator for ThuVien2 (Phase 7 / Phase 9).
 
 Queries live StudentCode and Barcode keys from SQL Server (ThuVien2)
-and inserts 5,500+ realistic library event log documents into MongoDB
-(ThuVien2Logs.library_event_logs) for cross-database analytics.
+and inserts 8,000 realistic library event log documents into MongoDB
+(ThuVien2Logs.library_event_logs) with skewed popularity weights.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ SQL_DB = os.getenv("THUVIEN2_SQL_DB", "ThuVien2")
 MONGO_URI = os.getenv("THUVIEN2_MONGO_URI", "mongodb://localhost:27017/")
 MONGO_DB = os.getenv("THUVIEN2_MONGO_DB", "ThuVien2Logs")
 MONGO_COLLECTION = "library_event_logs"
-TARGET_DOC_COUNT = 5500
+TARGET_DOC_COUNT = 8000
 
 
 def get_sql_connection() -> pyodbc.Connection:
@@ -50,14 +50,15 @@ def fetch_sql_keys(conn: pyodbc.Connection) -> tuple[list[dict], list[dict]]:
     """Fetch live StudentCode and Barcode records from ThuVien2."""
     cursor = conn.cursor()
 
-    cursor.execute("SELECT StudentCode, Status FROM dbo.Student;")
+    cursor.execute("SELECT StudentCode, Status FROM dbo.Student ORDER BY StudentID;")
     students = [{"StudentCode": row[0], "Status": row[1]} for row in cursor.fetchall()]
 
     cursor.execute(
         """
         SELECT bi.Barcode, bi.StatusID, bt.BookTitle
         FROM dbo.BookItem bi
-        INNER JOIN dbo.BookTitle bt ON bi.TitleID = bt.TitleID;
+        INNER JOIN dbo.BookTitle bt ON bi.TitleID = bt.TitleID
+        ORDER BY bi.BookItemID;
         """
     )
     books = [
@@ -71,27 +72,36 @@ def fetch_sql_keys(conn: pyodbc.Connection) -> tuple[list[dict], list[dict]]:
     return students, books
 
 
+def build_skewed_weights(n: int, exponent: float = 1.25) -> list[float]:
+    """Generate Zipf-like popularity weights across n items."""
+    ranks = list(range(1, n + 1))
+    random.shuffle(ranks)
+    return [1.0 / (r ** exponent) for r in ranks]
+
+
 def weighted_timestamp(now_utc: datetime) -> datetime:
     """Generate a realistic timestamp over the past 60 days weighted toward daytime campus hours."""
     days_ago = random.randint(0, 59)
-    # Campus hours 07:00 - 21:00 weighted higher
     hours = list(range(7, 22))
     weights = [2, 5, 8, 10, 9, 7, 8, 10, 9, 8, 6, 4, 3, 2, 1]
     hour = random.choices(hours, weights=weights, k=1)[0]
     minute = random.randint(0, 59)
     second = random.randint(0, 59)
-    dt = (now_utc - timedelta(days=days_ago)).replace(
+    return (now_utc - timedelta(days=days_ago)).replace(
         hour=hour, minute=minute, second=second, microsecond=0
     )
-    return dt
 
 
 def build_event_document(
-    students: list[dict], books: list[dict], now_utc: datetime
+    students: list[dict],
+    student_weights: list[float],
+    books: list[dict],
+    book_weights: list[float],
+    now_utc: datetime,
 ) -> dict:
     """Construct a single realistic event log document referencing live SQL keys."""
-    student = random.choice(students)
-    book = random.choice(books)
+    student = random.choices(students, weights=student_weights, k=1)[0]
+    book = random.choices(books, weights=book_weights, k=1)[0]
     event_type = random.choices(
         ["KIOSK_SCAN", "CATALOG_SEARCH", "RFID_GATE_PING"],
         weights=[45, 35, 20],
@@ -184,17 +194,22 @@ def main() -> None:
     with get_sql_connection() as sql_conn:
         students, books = fetch_sql_keys(sql_conn)
 
+    student_weights = build_skewed_weights(len(students), exponent=1.15)
+    book_weights = build_skewed_weights(len(books), exponent=1.30)
+
     print(
         f"Loaded {len(students)} StudentCode(s) and {len(books)} Barcode(s) from SQL Server ({SQL_DB})."
     )
 
-    docs = [build_event_document(students, books, now_utc) for _ in range(TARGET_DOC_COUNT)]
+    docs = [
+        build_event_document(students, student_weights, books, book_weights, now_utc)
+        for _ in range(TARGET_DOC_COUNT)
+    ]
 
     client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
     db = client[MONGO_DB]
     col = db[MONGO_COLLECTION]
 
-    # Idempotent reload
     col.drop()
 
     batch_size = 1000

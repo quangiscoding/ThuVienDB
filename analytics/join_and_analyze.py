@@ -1,5 +1,5 @@
 """
-Cross-Database Analytics & Visualization Pipeline for ThuVien2 (Phase 8).
+Cross-Database Analytics & Visualization Pipeline for ThuVien2 (Phase 8 / Phase 9).
 
 Joins relational data from SQL Server (ThuVien2) with high-frequency event logs
 from MongoDB (ThuVien2Logs.library_event_logs) on Barcode and StudentCode,
@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pyodbc
 import seaborn as sns
+from matplotlib.patches import Patch
 from pymongo import MongoClient
 
 SQL_SERVER = os.getenv("THUVIEN2_SQL_SERVER", "localhost")
@@ -136,7 +137,7 @@ def load_mongo_logs() -> pd.DataFrame:
 def plot_search_demand_vs_availability(
     df_logs_books: pd.DataFrame, df_books: pd.DataFrame
 ) -> Path:
-    """Chart 1: Digital catalog/kiosk demand (MongoDB) vs. physical AVAILABLE copies (SQL)."""
+    """Chart 1: Top 10 titles by digital demand (MongoDB) vs. physical AVAILABLE copies (SQL)."""
     demand = (
         df_logs_books[df_logs_books["event_type"].isin(["CATALOG_SEARCH", "KIOSK_SCAN"])]
         .groupby("BookTitle", as_index=False)
@@ -152,14 +153,23 @@ def plot_search_demand_vs_availability(
             AvailableCopies=("StatusID", lambda s: int((s == "AVAILABLE").sum())),
         )
     )
-    merged = demand.merge(stock, on="BookTitle", how="inner").sort_values(
-        "DigitalDemand", ascending=True
+    merged = (
+        demand.merge(stock, on="BookTitle", how="inner")
+        .sort_values("DigitalDemand", ascending=False)
+        .head(10)
+        .sort_values("DigitalDemand", ascending=True)
     )
 
-    fig, ax1 = plt.subplots(figsize=(11, 5.5))
+    fig, ax1 = plt.subplots(figsize=(12, 6))
     y = range(len(merged))
 
-    ax1.barh(y, merged["DigitalDemand"], height=0.45, color="#2b6cb0", label="Digital Demand (Searches + Scans)")
+    ax1.barh(
+        y,
+        merged["DigitalDemand"],
+        height=0.48,
+        color="#2b6cb0",
+        label="Digital Demand (Searches + Scans)",
+    )
     ax1.barh(
         [i - 0.25 for i in y],
         merged["UnavailableHits"],
@@ -171,11 +181,11 @@ def plot_search_demand_vs_availability(
     ax1.set_yticks(list(y))
     ax1.set_yticklabels(merged["BookTitle"], fontsize=9)
     ax1.set_xlabel("MongoDB Event Count (60 Days)")
-    ax1.set_title("Digital Demand vs. Physical Copy Availability by Book Title", fontweight="bold")
+    ax1.set_title("Top 10 Titles: Digital Demand vs. Physical Copy Availability", fontweight="bold")
 
     for i, (_, row) in enumerate(merged.iterrows()):
         ax1.text(
-            row["DigitalDemand"] + 15,
+            row["DigitalDemand"] + max(merged["DigitalDemand"].max() * 0.015, 5),
             i,
             f"Avail: {int(row['AvailableCopies'])}/{int(row['TotalCopies'])}",
             va="center",
@@ -184,12 +194,12 @@ def plot_search_demand_vs_availability(
             fontweight="bold",
         )
 
-    ax1.set_xlim(0, merged["DigitalDemand"].max() * 1.22)
-    ax1.legend(loc="lower right")
+    ax1.set_xlim(0, merged["DigitalDemand"].max() * 1.25)
+    ax1.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=2, frameon=True)
     fig.tight_layout()
 
     out = CHARTS_DIR / "01_search_demand_vs_availability.png"
-    fig.savefig(out, dpi=150)
+    fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
     return out
 
@@ -229,7 +239,7 @@ def plot_kiosk_hourly_traffic(df_logs: pd.DataFrame) -> Path:
 
 
 def plot_student_engagement_vs_delinquency(df_logs_students: pd.DataFrame) -> Path:
-    """Chart 3: Student digital activity (MongoDB) vs. outstanding fine balance (SQL)."""
+    """Chart 3: Top 10 students by digital activity (MongoDB) vs. outstanding fine balance (SQL)."""
     stu_summary = (
         df_logs_students.groupby(
             ["StudentCode", "FullName", "AccountStatus", "OutstandingBalance"],
@@ -240,12 +250,13 @@ def plot_student_engagement_vs_delinquency(df_logs_students: pd.DataFrame) -> Pa
             DeniedFines=("result", lambda s: int((s == "DENIED_FINES").sum())),
         )
         .sort_values("TotalEvents", ascending=False)
+        .head(10)
     )
 
-    fig, ax1 = plt.subplots(figsize=(11, 5.5))
+    fig, ax1 = plt.subplots(figsize=(12, 6))
     x = range(len(stu_summary))
     labels = [
-        f"{r['FullName']}\n({r['StudentCode']}, {r['AccountStatus']})"
+        f"{r['FullName']} ({r['StudentCode']})"
         for _, r in stu_summary.iterrows()
     ]
 
@@ -256,14 +267,14 @@ def plot_student_engagement_vs_delinquency(df_logs_students: pd.DataFrame) -> Pa
     }
     bar_colors = [status_colors.get(s, "#3182ce") for s in stu_summary["AccountStatus"]]
 
-    bars = ax1.bar(x, stu_summary["TotalEvents"], width=0.45, color=bar_colors, alpha=0.85, label="Total Log Events")
+    bars = ax1.bar(x, stu_summary["TotalEvents"], width=0.5, color=bar_colors, alpha=0.88)
     ax1.set_xticks(list(x))
-    ax1.set_xticklabels(labels, fontsize=8.5)
+    ax1.set_xticklabels(labels, fontsize=8.5, rotation=20, ha="right")
     ax1.set_ylabel("MongoDB Log Events (Scans + Searches)")
-    ax1.set_title("Student Library Engagement vs. Fine Delinquency", fontweight="bold")
+    ax1.set_title("Top 10 Active Patrons: Library Engagement vs. Fine Delinquency", fontweight="bold")
 
     ax2 = ax1.twinx()
-    ax2.plot(
+    (line_obj,) = ax2.plot(
         list(x),
         stu_summary["OutstandingBalance"] / 1000.0,
         color="#c53030",
@@ -277,16 +288,24 @@ def plot_student_engagement_vs_delinquency(df_logs_students: pd.DataFrame) -> Pa
     for bar, (_, row) in zip(bars, stu_summary.iterrows()):
         ax1.text(
             bar.get_x() + bar.get_width() / 2,
-            bar.get_height() + 15,
+            bar.get_height() + max(stu_summary["TotalEvents"].max() * 0.02, 4),
             f"Denied: {int(row['DeniedFines'])}",
             ha="center",
             fontsize=8,
             color="#2d3748",
         )
 
+    legend_handles = [
+        Patch(facecolor="#3182ce", label="ACTIVE Student"),
+        Patch(facecolor="#e53e3e", label="SUSPENDED Student"),
+        Patch(facecolor="#718096", label="EXPIRED Student"),
+        line_obj,
+    ]
+    ax1.legend(handles=legend_handles, loc="upper right", frameon=True)
+
     fig.tight_layout()
     out = CHARTS_DIR / "03_student_engagement_vs_delinquency.png"
-    fig.savefig(out, dpi=150)
+    fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
     return out
 
@@ -322,7 +341,7 @@ def plot_fine_revenue_and_recovery(
 
     for i, rule in enumerate(fines.index):
         total = fines.loc[rule].sum()
-        ax.text(i, total + 8, f"{total:,.0f}k", ha="center", fontsize=9, fontweight="bold")
+        ax.text(i, total + max(total * 0.02, 10), f"{total:,.0f}k", ha="center", fontsize=9, fontweight="bold")
 
     fig.tight_layout()
     out = CHARTS_DIR / "04_fine_revenue_and_recovery_breakdown.png"

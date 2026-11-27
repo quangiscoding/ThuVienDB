@@ -252,3 +252,10 @@ Joins SQL Server (`Student`, `BookTitle`, `BookItem`, `LoanSlip`, `LoanItem`, `F
 
 ## Next Step
 Awaiting your approval of `PLAN.md` before starting **Phase 1 (Schema Audit & English Refactor)**.
+
+---
+
+## Phase 9 — Bulk Dataset Scaling & Chart Polish (`scripts/`, `nosql/`, `analytics/`)
+- **SQL Bulk Seeder (`scripts/seed_bulk_sql.py`):** Preserves existing `002_seed/` fixtures and inserts ~40 students, ~20 book titles, ~75 `BookItem` copies, and ~300 historical loans, returns, `CK_FineItem_Link`-compliant fines, and payments/waivers over the past 6 months (`random.seed(42)`).
+- **NoSQL Scale & Skew (`nosql/generate_logs.py`):** Increases log volume to 8,000 documents with skewed Zipf-like popularity weights across `BookTitle`/`Barcode` and `StudentCode`.
+- **Chart Readability (`analytics/join_and_analyze.py`):** Slices Chart 1 and Chart 3 to Top 10 (`.head(10)`), moves Chart 1's legend outside the plot area with `xlim * 1.25`, and rotates Chart 3's x-axis labels (`rotation=20, ha='right'`) with a unified legend.
