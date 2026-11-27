@@ -1,0 +1,50 @@
+[
+  {
+    "event_id": "a1b2c3d4-e5f6-4890-abcd-ef1234567890",
+    "event_type": "KIOSK_SCAN",
+    "timestamp": "2026-10-15T09:23:11Z",
+    "StudentCode": "29210252479",
+    "Barcode": "BI001",
+    "station_id": "KIOSK-01",
+    "action": "SELF_CHECKOUT_ATTEMPT",
+    "result": "SUCCESS",
+    "search_query": null,
+    "response_time_ms": 142,
+    "metadata": {
+      "client_os": "Windows-Kiosk",
+      "session_duration_sec": 18
+    }
+  },
+  {
+    "event_id": "b2c3d4e5-f6a7-4901-bcde-f12345678901",
+    "event_type": "CATALOG_SEARCH",
+    "timestamp": "2026-10-16T14:05:44Z",
+    "StudentCode": "29210252480",
+    "Barcode": "BI007",
+    "station_id": "OPAC-WEB-02",
+    "action": "OPAC_KEYWORD_SEARCH",
+    "result": "UNAVAILABLE",
+    "search_query": "Designing Data-Intensive Applications",
+    "response_time_ms": 87,
+    "metadata": {
+      "client_os": "Web-Browser",
+      "session_duration_sec": 45
+    }
+  },
+  {
+    "event_id": "c3d4e5f6-a7b8-4012-cdef-123456789012",
+    "event_type": "RFID_GATE_PING",
+    "timestamp": "2026-10-17T16:42:09Z",
+    "StudentCode": "29210252481",
+    "Barcode": "BI004",
+    "station_id": "GATE-MAIN-01",
+    "action": "EXIT_GATE_CHECK",
+    "result": "CLEARED",
+    "search_query": null,
+    "response_time_ms": 23,
+    "metadata": {
+      "client_os": "RFID-Firmware-v2",
+      "session_duration_sec": 1
+    }
+  }
+]
