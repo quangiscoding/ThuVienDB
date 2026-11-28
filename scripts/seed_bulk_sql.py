@@ -43,6 +43,14 @@ def get_sql_connection() -> pyodbc.Connection:
     return pyodbc.connect(conn_str, autocommit=False)
 
 
+def _fetch_scalar_id(cur: pyodbc.Cursor) -> int:
+    """Fetch a single integer ID from an OUTPUT inserted.<ID> query."""
+    row = cur.fetchone()
+    if row is None:
+        raise RuntimeError("Expected an inserted ID row from SQL Server, got None.")
+    return int(row[0])
+
+
 def main() -> None:
     random.seed(42)
     today = date.today()
@@ -94,7 +102,7 @@ def main() -> None:
                 email,
                 status,
             )
-            new_student_ids.append(cur.fetchone()[0])
+            new_student_ids.append(_fetch_scalar_id(cur))
 
         # ---------------------------------------------------------------------
         # 2. Insert 10 Authors & 20 BookTitles + Author_BookTitle
@@ -114,7 +122,7 @@ def main() -> None:
         author_ids: list[int] = []
         for name in author_names:
             cur.execute("INSERT INTO dbo.Author (AuthorName) OUTPUT inserted.AuthorID VALUES (?);", name)
-            author_ids.append(cur.fetchone()[0])
+            author_ids.append(_fetch_scalar_id(cur))
 
         book_titles = [
             ("Domain-Driven Design", 0),
@@ -141,7 +149,7 @@ def main() -> None:
         title_ids: list[int] = []
         for title, auth_idx in book_titles:
             cur.execute("INSERT INTO dbo.BookTitle (BookTitle) OUTPUT inserted.TitleID VALUES (?);", title)
-            tid = cur.fetchone()[0]
+            tid = _fetch_scalar_id(cur)
             title_ids.append(tid)
             cur.execute(
                 "INSERT INTO dbo.Author_BookTitle (AuthorID, TitleID) VALUES (?, ?);",
@@ -168,7 +176,7 @@ def main() -> None:
                 tid,
                 price,
             )
-            bid = cur.fetchone()[0]
+            bid = _fetch_scalar_id(cur)
             book_items.append({"id": bid, "price": price, "available_from": today - timedelta(days=180), "final_status": "AVAILABLE"})
 
         # ---------------------------------------------------------------------
@@ -200,7 +208,7 @@ def main() -> None:
                 staff_id,
                 loan_date,
             )
-            loan_slip_id = cur.fetchone()[0]
+            loan_slip_id = _fetch_scalar_id(cur)
 
             cur.execute(
                 """
@@ -212,7 +220,7 @@ def main() -> None:
                 loan_slip_id,
                 due_date,
             )
-            loan_item_id = cur.fetchone()[0]
+            loan_item_id = _fetch_scalar_id(cur)
             created_loans += 1
 
             # Recent loans (last 20 days) have a higher chance of still being active
@@ -244,7 +252,7 @@ def main() -> None:
                     fine_status,
                     "Lost book replacement fine",
                 )
-                fine_id = cur.fetchone()[0]
+                fine_id = _fetch_scalar_id(cur)
                 created_fines += 1
                 _insert_payment_for_fine(
                     cur, fine_id, amount, fine_status, stu_id, staff_id, admin_ids[0], min(today, due_date + timedelta(days=7))
@@ -268,7 +276,7 @@ def main() -> None:
                 staff_id,
                 ret_date,
             )
-            ret_slip_id = cur.fetchone()[0]
+            ret_slip_id = _fetch_scalar_id(cur)
 
             cur.execute(
                 """
@@ -279,7 +287,7 @@ def main() -> None:
                 ret_slip_id,
                 loan_item_id,
             )
-            ret_item_id = cur.fetchone()[0]
+            ret_item_id = _fetch_scalar_id(cur)
             created_returns += 1
 
             # Book becomes available again after return unless damaged
@@ -306,7 +314,7 @@ def main() -> None:
                     fine_status,
                     f"Overdue return by {days_over} day(s)",
                 )
-                fine_id = cur.fetchone()[0]
+                fine_id = _fetch_scalar_id(cur)
                 created_fines += 1
                 _insert_payment_for_fine(cur, fine_id, late_amt, fine_status, stu_id, staff_id, admin_ids[0], ret_date)
 
@@ -326,7 +334,7 @@ def main() -> None:
                     fine_status,
                     "Damaged book penalty",
                 )
-                fine_id = cur.fetchone()[0]
+                fine_id = _fetch_scalar_id(cur)
                 created_fines += 1
                 _insert_payment_for_fine(cur, fine_id, dmg_amt, fine_status, stu_id, staff_id, admin_ids[0], ret_date)
 
@@ -384,7 +392,7 @@ def _insert_payment_for_fine(
         rtype,
         paid,
     )
-    receipt_id = cur.fetchone()[0]
+    receipt_id = _fetch_scalar_id(cur)
     cur.execute(
         "INSERT INTO dbo.PaymentItem (ReceiptID, FineItemID, AmountPaid) VALUES (?, ?, ?);",
         receipt_id,
